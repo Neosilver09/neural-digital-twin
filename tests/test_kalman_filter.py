@@ -60,3 +60,32 @@ def test_update_computes_posterior_state_and_covariance_using_measurement():
 
     np.testing.assert_allclose(kf.x, np.array([[expected_x]]))
     np.testing.assert_allclose(kf.P, np.array([[expected_P]]))
+
+
+def test_update_barely_moves_state_when_measurement_noise_is_huge():
+    F = np.array([[1.5]])
+    H = np.array([[1.0]])
+    Q = np.array([[0.5]])
+    R = np.array([[1.0e6]])  # sensor is essentially untrustworthy
+    x_prior = np.array([[7.5]])
+    P_prior = np.array([[7.25]])
+
+    kf = KalmanFilter(F=F, H=H, Q=Q, R=R, x0=x_prior, P0=P_prior)
+    kf.update(np.array([[10.0]]))  # measurement disagrees sharply with prior
+
+    np.testing.assert_allclose(kf.x, x_prior, atol=1e-3)
+
+
+def test_update_moves_state_close_to_measurement_when_measurement_noise_is_tiny():
+    F = np.array([[1.5]])
+    H = np.array([[1.0]])
+    Q = np.array([[0.5]])
+    R = np.array([[1.0e-6]])  # sensor is essentially exact
+    x_prior = np.array([[7.5]])
+    P_prior = np.array([[7.25]])
+
+    z = np.array([[10.0]])
+    kf = KalmanFilter(F=F, H=H, Q=Q, R=R, x0=x_prior, P0=P_prior)
+    kf.update(z)
+
+    np.testing.assert_allclose(kf.x, z, atol=1e-3)

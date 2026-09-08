@@ -32,3 +32,31 @@ def test_predict_updates_state_and_covariance_using_transition_model():
     np.testing.assert_allclose(kf.x, np.array([[7.5]]))
     # P = F @ P0 @ F.T + Q = 1.5 * 3.0 * 1.5 + 0.5
     np.testing.assert_allclose(kf.P, np.array([[7.25]]))
+
+
+def test_update_computes_posterior_state_and_covariance_using_measurement():
+    F = np.array([[1.5]])
+    H = np.array([[1.0]])
+    Q = np.array([[0.5]])
+    R = np.array([[1.0]])
+    # Prior (x, P): the predicted state from the previous test, i.e. the
+    # output of predict() just before a new measurement arrives.
+    x_prior = np.array([[7.5]])
+    P_prior = np.array([[7.25]])
+
+    kf = KalmanFilter(F=F, H=H, Q=Q, R=R, x0=x_prior, P0=P_prior)
+    z = np.array([[10.0]])
+    kf.update(z)
+
+    # y = z - H @ x = 10.0 - 7.5
+    innovation = 10.0 - 7.5
+    # S = H @ P @ H.T + R = 7.25 + 1.0
+    innovation_covariance = 7.25 + 1.0
+    # K = P @ H.T @ inv(S) = 7.25 / 8.25
+    kalman_gain = 7.25 / innovation_covariance
+    expected_x = 7.5 + kalman_gain * innovation
+    # P = (I - K @ H) @ P = (1 - K) * 7.25
+    expected_P = (1 - kalman_gain) * 7.25
+
+    np.testing.assert_allclose(kf.x, np.array([[expected_x]]))
+    np.testing.assert_allclose(kf.P, np.array([[expected_P]]))

@@ -126,3 +126,32 @@ def test_constant_velocity_model_tracks_true_position_and_velocity():
     # to not be flaky if the seed or noise realization changes.
     assert abs(estimated_position - final_true_position) < 0.5
     assert abs(estimated_velocity - true_velocity) < 0.05
+
+
+def test_repeated_predict_without_update_strictly_grows_covariance():
+    # F = identity isolates the property: with no dynamics reshaping the
+    # state, repeated predict() should still accumulate uncertainty purely
+    # from process noise Q, since no measurement ever arrives to correct it.
+    F = np.eye(2)
+    H = np.array([[1.0, 0.0]])
+    Q = np.array([[0.1, 0.0], [0.0, 0.2]])
+    R = np.array([[1.0]])
+    x0 = np.array([[0.0], [0.0]])
+    P0 = np.array([[1.0, 0.0], [0.0, 1.0]])
+
+    kf = KalmanFilter(F=F, H=H, Q=Q, R=R, x0=x0, P0=P0)
+
+    n_steps = 10
+    traces = [np.trace(kf.P)]
+    for _ in range(n_steps):
+        kf.predict()
+        traces.append(np.trace(kf.P))
+
+    # Strict growth at every single step, not just start-vs-end.
+    assert all(
+        later > earlier for earlier, later in zip(traces, traces[1:], strict=False)
+    )
+
+    # F = I means the recursion is exact: P_k = P0 + k * Q.
+    expected_final_P = P0 + n_steps * Q
+    np.testing.assert_allclose(kf.P, expected_final_P)

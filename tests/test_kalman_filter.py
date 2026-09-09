@@ -89,3 +89,40 @@ def test_update_moves_state_close_to_measurement_when_measurement_noise_is_tiny(
     kf.update(z)
 
     np.testing.assert_allclose(kf.x, z, atol=1e-3)
+
+
+def test_constant_velocity_model_tracks_true_position_and_velocity():
+    # State is [position, velocity]^T; only position is measured. This is
+    # the first test using genuine (non-1x1) matrices, exercising matrix
+    # multiplication and transposition that scalar tests couldn't catch bugs in.
+    dt = 1.0
+    F = np.array([[1.0, dt], [0.0, 1.0]])
+    H = np.array([[1.0, 0.0]])
+    Q = np.array([[1e-4, 0.0], [0.0, 1e-4]])
+    R = np.array([[0.5]])
+    x0 = np.array([[0.0], [0.0]])  # no prior belief about position or velocity
+    P0 = np.array([[10.0, 0.0], [0.0, 10.0]])  # so start very uncertain
+
+    kf = KalmanFilter(F=F, H=H, Q=Q, R=R, x0=x0, P0=P0)
+
+    true_velocity = 2.0
+    n_steps = 30
+    measurement_noise_std = np.sqrt(R[0, 0])
+    rng = np.random.default_rng(42)
+
+    for step in range(1, n_steps + 1):
+        true_position = true_velocity * step * dt
+        z = np.array([[true_position + rng.normal(0.0, measurement_noise_std)]])
+        kf.predict()
+        kf.update(z)
+
+    final_true_position = true_velocity * n_steps * dt
+    estimated_position = kf.x[0, 0]
+    estimated_velocity = kf.x[1, 0]
+
+    # Tolerances are a few multiples of the actual residual observed with this
+    # seed (~0.18 position, ~0.01 velocity) -- tight enough to catch a
+    # regression (e.g. a sign error or an ignored measurement), loose enough
+    # to not be flaky if the seed or noise realization changes.
+    assert abs(estimated_position - final_true_position) < 0.5
+    assert abs(estimated_velocity - true_velocity) < 0.05
